@@ -13,10 +13,25 @@ from pathlib import Path
 
 from src import config
 from src.generate import generate_answer
-from src.retrieve import retrieve
+from src.retrieve import list_sources, retrieve
 
 DATASET_PATH = config.PROJECT_ROOT / "eval" / "dataset.jsonl"
 RESULTS_DIR = config.PROJECT_ROOT / "eval" / "results"
+
+
+# dataset.jsonl stores scope_source as just a filename (e.g. "QueryCraft.pdf"),
+# not a machine-specific absolute path, so the dataset stays portable across
+# machines/OSes. Chroma's "source" metadata is whatever path the document was
+# ingested from, so resolve the filename to whatever's actually indexed right
+# now. Returns None if that document isn't indexed on this machine (e.g. a
+# personal document intentionally excluded from the public repo) - callers
+# should fall back to unscoped retrieval rather than filtering on a path that
+# matches nothing.
+def resolve_scope_source(filename: str) -> str | None:
+    for source in list_sources():
+        if Path(source).name == filename:
+            return source
+    return None
 
 
 # Reads the hand-labeled eval set: question + ground_truth_answer +
@@ -46,8 +61,9 @@ def run(items: list[dict]) -> list[dict]:
         question = item["question"]
         print(f"[{i}/{len(items)}] {question}")
         scope_source = item.get("scope_source")
-        if scope_source:
-            chunks = retrieve(question, k=config.SCOPED_TOP_K, source=scope_source)
+        resolved_source = resolve_scope_source(scope_source) if scope_source else None
+        if resolved_source:
+            chunks = retrieve(question, k=config.SCOPED_TOP_K, source=resolved_source)
         else:
             chunks = retrieve(question)  # retrieval stage
         answer = generate_answer(question, chunks)  # generation stage

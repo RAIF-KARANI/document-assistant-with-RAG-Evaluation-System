@@ -72,7 +72,13 @@ what each module does.
   faithfulness number likely understates the true rate (the judge
   inconsistently penalizes correct "I don't know" refusals). The regression
   gate (`eval/test_regression.py`) has been run for real, not just
-  structurally checked — currently passing.
+  structurally checked — currently passing. **Note:** 12 of the 32 questions
+  are scoped to `data/my_docs/QueryCraft.pdf`, the author's own document,
+  which is intentionally *not* included in this repo (see Corpus below). On a
+  fresh clone those questions retrieve nothing to be scoped against and fall
+  back to unscoped retrieval — expect a lower score than the committed
+  baseline until you add your own document(s) and (optionally) your own
+  eval questions for them.
 - **Experimentation** — eight config experiments run against the baseline
   (`experiments/experiments.csv`), isolated in their own Chroma collections
   so they never touch the real data. One genuine quality win found (swapping
