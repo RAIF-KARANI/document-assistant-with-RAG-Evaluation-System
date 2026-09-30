@@ -16,6 +16,42 @@ regression-tested as the pipeline evolves, instead of trusted on vibes.
 Runs fully locally, no API keys or cloud costs: embeddings via
 `sentence-transformers` and generation via [Ollama](https://ollama.com).
 
+<p align="center">
+  <img src="docs/screenshots/chat.jpg" alt="Document Assistant chat UI, showing a grounded answer with a collapsed source-chunks panel" width="48%">
+  <img src="docs/screenshots/dashboard.jpg" alt="Evaluation Dashboard showing current baseline scores and experiments vs. baseline" width="48%">
+</p>
+<p align="center"><em>Left: the chat UI answering a question, grounded in retrieved chunks. Right: the Evaluation Dashboard — the visual view into the evaluation system below.</em></p>
+
+## Why this is an "Automated RAG Evaluation System," not just a chatbot
+
+Most portfolio RAG projects are a chat UI over an LLM and stop there —
+correctness is whatever the demo looked like at the time. This project treats
+that as unacceptable and builds a second system whose only job is to keep the
+first one honest:
+
+- **A hand-labeled question set** (`eval/dataset.jsonl`, 32 questions) with a
+  known-correct `ground_truth_answer` for each — including questions that are
+  deliberately unanswerable, so refusals get checked too.
+- **Automated scoring, not eyeballing.** `eval/run_eval_dataset.py` runs every
+  question through the exact same `retrieve()`/`generate_answer()` code path
+  the chat UI uses, and `eval/evaluate.py` scores the results with Ragas
+  metrics (`faithfulness`, `context_recall`) using a local Ollama model as the
+  judge — no manual review, no paid judge API.
+- **A regression gate that actually blocks regressions.** `eval/test_regression.py`
+  is a pytest suite that re-generates and re-scores the full dataset from
+  scratch and fails if either metric drops more than 0.05 versus
+  `eval/baseline_scores.json`. This is not a smoke test — it's been run for
+  real (a ~33 minute full run against a local judge model), and it passed.
+- **Isolated experimentation.** `experiments/run_experiment.py` lets you try a
+  different chunk size, top-k, or embedding model against the same dataset,
+  scored the same way, logged to `experiments/experiments.csv` — without ever
+  touching the real vector store, so a bad experiment can't corrupt the
+  baseline.
+
+In short: retrieval and generation quality here are a number that gets
+recomputed and checked, not a vibe. See below for real, unedited proof of
+that in action.
+
 ## Status
 
 Phases 1-5 substantially complete. See [PLAN.md](PLAN.md) for the full
@@ -201,6 +237,50 @@ python -m experiments.run_experiment <label> --embedding-model sentence-transfor
 Each run ingests into its own isolated Chroma collection (if needed), scores
 with the fast/reliable metrics, and appends a row to
 `experiments/experiments.csv` comparing against the baseline.
+
+### Example eval questions, as proof
+
+Real rows from `eval/dataset.jsonl` and the actual generated answers/scores
+from `eval/results/20260930T121458Z.jsonl` — not cherry-picked successes,
+this is the same run behind the current baseline.
+
+**1. The same question, unscoped vs. scoped — measuring the document-scoping fix**
+
+> **q28 — "What are two limitations of QueryCraft's current system, according to the report?"** *(unscoped, searches every document)*
+> Generated answer: *"I don't know. The context only discusses the objectives,
+> scope, and benefits of QueryCraft, but it does not mention any limitations of
+> the system."*
+> Scores: `faithfulness = 0.5`, `context_recall = 0.286`
+>
+> Retrieval pulled chunks from the *Results*, *Scope*, and *Benefits* sections
+> of the same PDF — never the actual *Limitations* section — so the model
+> (correctly, given what it was shown) said it didn't know.
+
+> **q32 — "What are the limitations of this project?"** *(scoped to `QueryCraft.pdf`, `SCOPED_TOP_K=20`)*
+> Generated answer: *"...the limitations of this project are... Token Limit
+> Constraints: The 'Context Window' of current LLMs is finite... Visualization
+> Limits: The current result visualization is limited to tabular data..."*
+> Scores: `faithfulness = 1.0`, `context_recall = 1.0`
+>
+> Same underlying question, same document. Scoping to one document plus a
+> higher top-k surfaced the real *Limitations* section, and both metrics went
+> from a partial failure to perfect. This is the exact before/after evidence
+> behind the "Document scoping + `SCOPED_TOP_K`" design decision above — a
+> measured fix, not a hopeful one.
+
+**2. Correct refusal on an unanswerable question**
+
+> **q19 — "Which cloud provider hosts the vector database used in this project?"** *(no correct answer exists in the corpus)*
+> Generated answer: *"I don't know. The context only mentions Pinecone as a
+> fully managed, cloud-hosted vector database, but it does not specify the
+> cloud provider."*
+>
+> The ground truth is "not answerable" — the retrieved chunks mention Pinecone
+> in the abstract but never say who hosts *this* project's database, and the
+> model declined to guess rather than hallucinating a provider name. (Ragas
+> reports `faithfulness = null` and `context_recall = 0.0` for this one — a
+> known judge-side artifact of scoring an intentionally-empty ground-truth
+> context, not a real failure; see CONCEPTS.md.)
 
 ## Project layout
 
