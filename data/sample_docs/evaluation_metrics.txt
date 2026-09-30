@@ -1,0 +1,46 @@
+Evaluating RAG Systems
+
+A RAG system can fail in two broad ways: retrieval can return the wrong
+chunks, or generation can produce an answer that is not actually supported
+by the chunks it did receive. Evaluation metrics are split along this same
+line, into retrieval metrics and generation metrics.
+
+Context precision measures how much of what was retrieved is actually
+relevant to the question. Low precision means the retrieved set contains
+noise, chunks that do not help and only dilute the language model's
+context window.
+
+Context recall measures how much of the information actually needed to
+answer the question was retrieved at all. A system can have clean, precise
+retrieval and still miss the one chunk that contained the real answer,
+which is the opposite failure from low precision.
+
+Faithfulness checks the generated answer against only the retrieved
+context, independent of any external ground truth: for each claim the
+answer makes, is that claim actually supported by the retrieved text. A low
+faithfulness score indicates hallucination, meaning the model said
+something the retrieved context never actually stated.
+
+Answer relevancy checks whether the generated answer actually addresses the
+question that was asked, separate from whether the answer is factually
+correct. An answer can be completely faithful to the retrieved context and
+still be irrelevant if it drifts off-topic or answers a nearby but
+different question.
+
+Answer correctness compares the generated answer against a human-written
+reference answer, blending semantic similarity with overlap in the specific
+facts stated.
+
+Metrics differ in whether they need a hand-written reference answer.
+Faithfulness and answer relevancy only need the question, the retrieved
+context, and the generated answer, so they can run on any question without
+manual labeling. Context recall and answer correctness need a reference
+answer to compare against, which is why building a hand-labeled evaluation
+dataset is a necessary step before those two metrics can be computed.
+
+These metrics are typically computed using another language model as a
+judge, which reads the question, context, and answer, and produces a score,
+often by breaking the answer down into individual claims and checking each
+one. This means evaluation itself is not free: it costs additional language
+model calls, and a weaker judge model can itself fail to produce reliable
+scores, especially on tasks that require careful structured output.

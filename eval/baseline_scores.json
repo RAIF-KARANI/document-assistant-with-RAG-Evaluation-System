@@ -1,0 +1,18 @@
+{
+  "label": null,
+  "source_results_file": "20260930T121458Z.jsonl",
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "top_k": 4,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "chat_model": "llama3.2",
+  "mean_scores": {
+    "faithfulness": 0.7723104056437391,
+    "context_recall": 0.7798272068433358
+  },
+  "scored_counts": {
+    "faithfulness": 27,
+    "context_recall": 31
+  },
+  "num_questions": 32
+}

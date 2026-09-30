@@ -1,0 +1,40 @@
+Comparing Vector Databases
+
+Vector databases share the same core job, storing embeddings and answering
+nearest-neighbor queries quickly, but differ in how they are deployed and
+how far they scale.
+
+Chroma is an embedded vector database: it runs directly inside the same
+Python process as the application, persisting its index to a folder on
+disk, with no separate server process to install or manage. This makes it
+well suited to prototyping and small to medium local projects, but it is
+not designed to be shared across multiple independent applications or
+scaled across many machines.
+
+Pinecone is a fully managed, cloud-hosted vector database. Applications
+connect to it over the network using an API key, and Pinecone handles
+scaling, replication, and availability. This removes operational burden
+but introduces a network dependency, a recurring cost, and means vector
+data leaves the local machine.
+
+Weaviate and Qdrant are open-source vector databases that can be
+self-hosted as standalone server processes, either on a person's own
+infrastructure or through a managed cloud offering. They sit between
+Chroma and Pinecone: more operational overhead than an embedded database,
+but more control than a fully managed one, and both scale to much larger
+collections than an embedded database typically handles well.
+
+Most vector databases use approximate nearest neighbor search rather than
+comparing a query against every stored vector one by one. A common
+algorithm is HNSW, or Hierarchical Navigable Small World, which organizes
+vectors into a multi-layer graph so a search can jump toward the right
+neighborhood in a handful of steps instead of scanning the entire
+collection. This trades a small chance of missing the single closest match
+for a large improvement in search speed, which matters once a collection
+holds millions of vectors, though it makes little practical difference on
+a small collection of a few dozen or a few hundred chunks.
+
+Choosing a vector database is mostly a deployment decision rather than a
+retrieval-quality decision: the choice of embedding model and chunking
+strategy affects retrieval quality far more than which vector database
+implementation stores and searches the resulting vectors.

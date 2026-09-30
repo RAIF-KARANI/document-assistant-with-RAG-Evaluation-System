@@ -1,0 +1,45 @@
+Chunking Strategies for RAG
+
+Chunking is the process of splitting a long document into smaller pieces
+before embedding, because embedding an entire long document as a single
+vector loses too much detail to be useful for precise retrieval.
+
+Fixed-size chunking splits text every N characters or tokens, optionally
+with some overlap between consecutive chunks so information near a chunk
+boundary is not lost entirely. This is simple and cheap to compute, but a
+purely naive version can cut a sentence in half if it is not careful about
+where it splits.
+
+Recursive character chunking improves on naive fixed-size chunking by
+trying a priority list of separators before cutting anywhere: paragraph
+breaks first, then line breaks, then spaces, and only cutting mid-word as a
+last resort. This produces cleaner chunks without the cost of a more
+sophisticated approach, but it still does not explicitly understand
+sentence boundaries or topic shifts.
+
+Sentence-based chunking groups whole sentences together until a size limit
+is reached, guaranteeing that no chunk ends mid-sentence. It requires a
+sentence boundary detector, which is a small additional processing step.
+
+Semantic chunking embeds individual sentences and looks for large drops in
+similarity between consecutive sentences to decide where to cut. This
+produces chunks that are topically coherent rather than sized by a fixed
+budget, but it costs an embedding call per sentence just to find the
+boundaries, before the real chunks are ever embedded for retrieval.
+
+Structure-aware chunking splits along a document's own headings and
+sections rather than an arbitrary character count, which works well for
+well-formatted documents like manuals or wikis, and lets each chunk carry
+metadata about which section it came from.
+
+Parent-child chunking indexes small child chunks for precise matching at
+retrieval time, but keeps a link back to a larger parent chunk or section.
+When a child chunk is retrieved, the system hands the language model the
+full parent chunk instead of just the small fragment, combining precise
+retrieval with complete context for generation.
+
+There is no universally correct chunk size. A common starting range is 300
+to 800 tokens per chunk with some overlap. The right choice depends on the
+kind of document, the embedding model, and the language model's context
+window, and should ultimately be decided by measuring retrieval quality on
+real questions rather than guessed at.

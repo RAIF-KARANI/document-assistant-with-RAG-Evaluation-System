@@ -1,0 +1,39 @@
+Generation and Prompting in RAG
+
+Once relevant chunks have been retrieved, the generation stage combines
+them with the original question into a single prompt and sends that prompt
+to a language model. This step is often called augmentation: the retrieved
+text augments, or is inserted into, the prompt before the model ever sees
+the question.
+
+There is no special retrieval-aware mode inside the language model itself.
+The model receives one block of text containing instructions, the retrieved
+context, and the question, and generates a continuation exactly as it would
+for any other prompt. All of the retrieval-augmented behavior comes from
+how the prompt was constructed, not from any special capability of the
+model.
+
+Grounding refers to instructing the model, in the prompt, to base its
+answer only on the supplied context rather than on knowledge it picked up
+during training. A typical grounding instruction tells the model to say it
+does not know the answer if the context does not contain it, rather than
+guessing. This instruction is a request the model is expected to follow,
+not a technical constraint that is enforced automatically, which is why a
+model can still occasionally ignore the supplied context and answer from
+its own memorized knowledge, a failure that faithfulness metrics exist to
+detect.
+
+Temperature is a setting that controls how much randomness the model uses
+when choosing its next word. A temperature of zero makes the model always
+pick the single most likely next word, producing deterministic and
+consistent output. Higher temperature values introduce more variety and
+creativity but also increase the chance the model drifts away from what the
+retrieved context actually says. For grounded, factual answers, a low
+temperature is generally preferred.
+
+Citing sources means asking the model to indicate which retrieved chunk
+supported each part of its answer, often using numbered references. This is
+a separate instruction from grounding itself: a model can be told to answer
+only from context without also being told to cite which piece of context it
+used, and a system that only shows which chunks were retrieved is not the
+same as a system that shows which chunks the model actually relied on.

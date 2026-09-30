@@ -1,0 +1,31 @@
+Embeddings in Depth
+
+An embedding is a fixed-length vector of numbers produced by a machine
+learning model to represent the meaning of a piece of text. Two pieces of
+text with similar meaning are mapped to vectors that are close together in
+the embedding space, even if they share few or no words in common.
+
+Embedding models are trained on large amounts of text using objectives that
+pull semantically related pairs of text closer together and push unrelated
+pairs further apart. The result is a space where distance corresponds to
+meaning rather than surface-level word overlap.
+
+Dimensionality is an important property of an embedding model. A model like
+sentence-transformers/all-MiniLM-L6-v2 produces 384-dimensional vectors,
+which is considered compact. Larger models can produce 768, 1024, or even
+3072-dimensional vectors. Higher dimensionality can capture more nuance but
+costs more memory to store and more compute to compare.
+
+Embedding models fall into two broad categories: general-purpose models
+trained on broad web text, and domain-specific models fine-tuned on
+specialized text such as legal documents, medical literature, or source
+code. A domain-specific embedding model often produces noticeably better
+retrieval quality within its domain than a general-purpose one, because it
+has learned which distinctions actually matter in that domain.
+
+A critical operational rule: the embedding model used to index documents
+and the embedding model used to embed queries at search time must be the
+same model. Different embedding models produce vectors in unrelated spaces,
+so comparing a query vector from one model against document vectors from a
+different model produces meaningless results, even if both models are
+otherwise high quality.

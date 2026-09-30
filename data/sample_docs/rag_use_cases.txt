@@ -1,0 +1,35 @@
+Common Use Cases for RAG
+
+Internal document assistants let employees ask questions in plain language
+about company wikis, policy documents, and internal knowledge bases,
+returning answers grounded in the actual current documents instead of
+relying on someone remembering where the right page is.
+
+Customer support assistants use RAG to answer questions about a product by
+retrieving from help center articles, documentation, and past support
+tickets, so answers stay consistent with published material and update
+automatically whenever the underlying documentation changes, without
+needing to retrain any model.
+
+Code search and developer assistants apply the same retrieval pattern to a
+codebase: source files are chunked, often by function or class rather than
+by a fixed character count, embedded, and retrieved to help answer
+questions about how a particular piece of functionality works or where it
+is implemented.
+
+Legal and compliance review tools retrieve relevant clauses or precedents
+from large document collections such as contracts or regulations, where
+faithfulness matters especially heavily, since an ungrounded or hallucinated
+answer in this domain can carry real legal or financial consequences.
+
+Research and literature assistants retrieve from collections of papers or
+articles to help summarize findings or answer questions across a body of
+work too large for a person to read in full, with citations back to the
+specific source material.
+
+Across all of these use cases, the same underlying pipeline applies:
+ingest and chunk the domain's documents, embed and index them, retrieve the
+most relevant pieces for a given question, and generate a grounded answer.
+What changes between use cases is mostly the source material, the chunking
+strategy suited to that material's structure, and how strict the grounding
+and faithfulness requirements need to be for that domain.

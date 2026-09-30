@@ -1,0 +1,35 @@
+Large Language Model Basics
+
+A large language model, or LLM, is a neural network trained on very large
+amounts of text to predict the next word, or more precisely the next
+token, given everything that came before it. Despite this simple training
+objective, sufficiently large models trained on enough text develop the
+ability to follow instructions, answer questions, and reason about text in
+useful ways.
+
+A token is the basic unit an LLM operates on. Tokens are not the same as
+words: common words are often a single token, while rarer words can be
+split into multiple sub-word tokens. As a rough rule of thumb for English
+text, one token is approximately four characters, or about three quarters
+of a word.
+
+The context window is the maximum number of tokens a model can consider at
+once, including the prompt, any retrieved context, and the model's own
+response. If the combined length of the instructions, retrieved chunks, and
+question exceeds the context window, the input has to be truncated or the
+request fails outright. This is one practical reason retrieval only
+returns a small number of chunks instead of an entire document collection.
+
+LLMs can be run in two broad ways: through a cloud API operated by a
+provider, which requires an API key and usually charges per token, or
+locally on a person's own hardware using a tool like Ollama, which loads a
+model's weights into memory and serves requests without needing internet
+access or a per-request cost. Local models are typically smaller than the
+largest cloud-hosted models because they need to fit in the memory of a
+single machine, which is one reason a local model can be noticeably weaker
+at demanding tasks like producing precisely structured output.
+
+Model size is often described by parameter count, such as three billion or
+seven billion parameters, commonly written as 3B or 7B. Larger models
+generally perform better across most tasks but require more memory and run
+more slowly, especially on hardware without a dedicated GPU.

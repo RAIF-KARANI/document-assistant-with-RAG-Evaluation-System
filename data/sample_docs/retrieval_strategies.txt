@@ -1,0 +1,38 @@
+Retrieval Strategies
+
+The core job of retrieval in a RAG system is to take a user's question and
+find the small number of document chunks most likely to help answer it.
+
+Semantic search retrieves by comparing embeddings: the question is embedded
+into the same vector space as the document chunks, and the chunks whose
+vectors are closest to the question's vector are returned. This matches on
+meaning rather than exact words, so it can find a relevant chunk even when
+the question and the chunk share almost no vocabulary.
+
+Keyword search, also called lexical search, matches on exact words or word
+stems, the way a traditional search engine or a simple text search works.
+It is fast and precise when the right keywords are known, but it fails
+completely when a question is phrased differently from the source text,
+even if the meaning is identical.
+
+Hybrid search combines both approaches, typically by running a semantic
+search and a keyword search in parallel and merging the results, often with
+a weighting scheme that favors one or the other depending on the query.
+Hybrid search tends to outperform either method alone, especially for
+queries that include specific identifiers, codes, or proper nouns that
+embeddings alone sometimes struggle to match precisely.
+
+Reranking is an optional second stage after initial retrieval: a small set
+of candidate chunks, larger than the final number needed, is retrieved
+quickly with a cheap method like vector similarity, and then a more
+expensive model re-scores and reorders those candidates for relevance
+before the final top chunks are selected. This two-stage approach balances
+speed and quality, since the expensive reranking step only ever looks at a
+small candidate set instead of the whole corpus.
+
+The number of chunks retrieved, often called top-k, is a tunable setting
+with a real tradeoff. Too few risks missing the chunk that actually
+contains the answer. Too many dilutes the language model's context with
+irrelevant material, increases cost, and on a small corpus can even mean
+retrieving the entire collection regardless of relevance, which defeats the
+purpose of retrieval entirely.

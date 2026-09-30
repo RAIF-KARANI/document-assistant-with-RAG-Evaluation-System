@@ -1,0 +1,23 @@
+Vector Databases
+
+A vector database stores data as high-dimensional numeric vectors, called
+embeddings, and is optimized to answer one specific question quickly: "which
+stored vectors are most similar to this query vector?"
+
+Similarity is usually measured with cosine similarity, which compares the
+angle between two vectors rather than their raw distance, or with Euclidean
+distance, which measures straight-line distance between them.
+
+Chroma is a lightweight, open-source vector database that is popular for
+prototyping RAG systems because it can run embedded inside a Python process
+with no separate server to manage, and it persists its index to a local
+folder on disk. Other vector databases such as Pinecone, Weaviate, and
+Qdrant are designed to run as standalone services and scale to much larger
+collections.
+
+When building a RAG system, the choice of chunk size affects retrieval
+quality: chunks that are too large dilute the embedding with unrelated
+content, while chunks that are too small lose context and can be retrieved
+out of context. A common starting point is 300 to 800 tokens per chunk with
+some overlap between consecutive chunks so that information near a chunk
+boundary is not lost.

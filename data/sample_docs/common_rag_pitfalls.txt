@@ -1,0 +1,39 @@
+Common Pitfalls in RAG Systems
+
+Embedding model mismatch is one of the most common and hardest to notice
+mistakes: if documents were indexed with one embedding model and queries
+are later embedded with a different one, similarity search silently
+produces poor results without throwing any error, because there is nothing
+technically wrong, the two vector spaces are simply unrelated.
+
+Stale indexes happen when the source documents change but the vector store
+is not rebuilt. The retrieval system keeps confidently returning chunks
+from the old version of a document, and because nothing errors out, this
+failure can go unnoticed for a long time unless the answers are checked
+against the current source material.
+
+Over-chunking, splitting text into pieces so small that each one loses its
+surrounding context, can cause a chunk to be technically about the right
+topic while missing the specific detail needed to actually answer a
+question, because that detail lived in a neighboring chunk that overlap
+alone did not fully capture.
+
+Under-chunking, using chunks so large that each one covers many unrelated
+ideas, dilutes the embedding: a chunk's vector ends up representing an
+average of several topics rather than one clear idea, which makes it
+match fewer questions precisely and can crowd out more relevant, more
+specific chunks during retrieval.
+
+Evaluating on a toy or unrealistically small dataset is a subtler pitfall:
+if the total number of chunks is close to the number retrieved per query,
+nearly every configuration ends up retrieving almost the entire collection
+regardless of relevance, which removes any real selection pressure and
+makes retrieval-quality experiments impossible to interpret. Meaningful
+retrieval experiments require the total chunk count to be substantially
+larger than the number of chunks retrieved per query.
+
+Trusting a single evaluation metric in isolation can also mislead:
+a system can score well on faithfulness while scoring poorly on context
+recall, meaning it never hallucinates but also never finds the information
+it needed in the first place. Reading multiple metrics together gives a
+much clearer picture than any single number.
