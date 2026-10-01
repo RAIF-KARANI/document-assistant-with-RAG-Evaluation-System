@@ -82,3 +82,43 @@ def retrieve_from(
         persist_directory=str(persist_directory),
     )
     return store.similarity_search(query, k=k)
+
+
+# Parent-child variant of retrieve_from (experiments/run_experiment.py
+# --parent-child): the index holds small *child* chunks (see
+# src/ingest.py's chunk_documents_parent_child), so similarity search
+# matches precisely - but this returns each match's *parent* chunk (full
+# text carried in the child's "parent_content" metadata) instead of the
+# child itself, so the LLM gets more complete surrounding context than
+# whatever small piece the query happened to match. Dedupes by parent_id
+# since two matching children can share the same parent; k child matches
+# can therefore return fewer than k parent documents.
+def retrieve_parent_child(
+    query: str,
+    k: int,
+    collection_name: str,
+    persist_directory,
+    embedding_model: str = config.EMBEDDING_MODEL,
+) -> list[Document]:
+    embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
+    store = Chroma(
+        collection_name=collection_name,
+        embedding_function=embeddings,
+        persist_directory=str(persist_directory),
+    )
+    child_hits = store.similarity_search(query, k=k)
+
+    seen_parent_ids = set()
+    parent_docs: list[Document] = []
+    for child in child_hits:
+        parent_id = child.metadata.get("parent_id")
+        if parent_id in seen_parent_ids:
+            continue
+        seen_parent_ids.add(parent_id)
+        parent_docs.append(
+            Document(
+                page_content=child.metadata.get("parent_content", child.page_content),
+                metadata={"source": child.metadata.get("source", "unknown")},
+            )
+        )
+    return parent_docs

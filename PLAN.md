@@ -190,14 +190,19 @@ trustworthy enough from this local-judge setup to lean on in Phase 4;
       default** — speed prioritized over the measured quality gain. No
       change to `src/config.py`; `embed_mpnet` stays logged in
       `experiments/` as a documented option if priorities change later.
-- [ ] Not tried: chunking strategy swap (parent-child) — would need new
-      code (`ParentDocumentRetriever`-style support), not just a config
-      flag like every other experiment here. Deliberately deferred:
-      Phase 4's methodology (one-variable-at-a-time, corpus-size effects,
-      judge-reliability limits, a real measured win) is already fully
-      demonstrated; further experiments have fast-diminishing teaching
-      value versus getting Phase 5 started. Revisit if there's appetite
-      later.
+- [x] Experiment: chunking strategy swap (parent-child) — built for real
+      (`chunk_documents_parent_child()` / `retrieve_parent_child()`,
+      `--parent-child` flag on `run_experiment.py`), tried two configs.
+      **Second genuine finding, this time negative:** `top_k=4` scored
+      `context_recall` 0.780→0.673 (−0.107); root-caused to child→parent
+      dedup collapsing matches to ~3.09 unique parents instead of 4.
+      Retried at `top_k=8` to fix it — dedup collapse confirmed fixed
+      (5.62 unique parents, more breadth than baseline) but
+      `context_recall` didn't recover at all (0.671) — the real cause is
+      likely the 400-char child size itself matching less precisely, not
+      chunk count. **Decision: not adopted** — a sound-on-paper idea that
+      measurably underperformed the simple baseline twice. Full root-cause
+      write-up in CONCEPTS.md.
 
 **Phase 4 wrapped up.** Infrastructure built and proven: experiment
 runner, regression gate, fast/reliable-metrics scoring. Six experiments
@@ -357,6 +362,23 @@ model swap) and consciously not adopted (speed over quality tradeoff).
       (see `eval/dataset.jsonl` q24) and a deliberate non-goal here. Tested
       directly (append/load/clear round-trip, verified file appears/
       disappears on disk correctly) before wiring into the UI.
+- [x] **Multi-turn conversational memory** — the "Contextual Amnesia"
+      non-goal above, revisited and built. New `src/memory.py`:
+      `extract_history()` pairs up the live session's chat turns;
+      `condense_question()` rewrites a bare follow-up ("and what about
+      NoSQL?") into a standalone query *before* retrieval, using an extra
+      local LLM call (skipped entirely when there's no history yet, so the
+      first question in a session costs nothing extra). `generate_answer()`
+      gained an optional `history` param for resolving pronouns in the
+      final answer too - omitted entirely by `eval/` and `experiments/`,
+      so the regression baseline is provably untouched (verified: same
+      answer with/without the param on identical input). Tested for real in
+      the browser, not just unit-level: "What database does QueryCraft
+      use?" → "and what about NoSQL?" correctly rewrote the follow-up to
+      "What database dialects does QueryCraft support for NoSQL
+      databases?" and answered "QueryCraft supports MongoDB as a NoSQL
+      database" - the actual failure mode this was built to fix, confirmed
+      fixed.
 
 ## Tech stack
 

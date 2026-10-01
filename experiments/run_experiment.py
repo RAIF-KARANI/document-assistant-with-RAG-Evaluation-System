@@ -7,10 +7,12 @@ the fast/reliable metrics (faithfulness, context_recall), and append a row
 to experiments/experiments.csv comparing against eval/baseline_scores.json.
 
     python -m experiments.run_experiment <label> [--chunk-size N] [--chunk-overlap N] [--top-k N] [--embedding-model NAME]
+    python -m experiments.run_experiment <label> --parent-child [--parent-chunk-size N] [--parent-chunk-overlap N] [--chunk-size N] [--chunk-overlap N]
 
 Examples:
     python -m experiments.run_experiment topk8 --top-k 8
     python -m experiments.run_experiment chunk1000 --chunk-size 1000 --chunk-overlap 100
+    python -m experiments.run_experiment parentchild --parent-child --parent-chunk-size 2000 --chunk-size 400
 
 Only override what you're testing - anything left unset uses the same value
 as the baseline (src/config.py), so the comparison isolates one variable.
@@ -28,8 +30,13 @@ from eval.run_eval_dataset import DATASET_PATH, load_dataset
 from ragas.dataset_schema import SingleTurnSample
 from src import config
 from src.generate import generate_answer
-from src.ingest import build_vector_store, chunk_documents, load_documents
-from src.retrieve import retrieve_from
+from src.ingest import (
+    build_vector_store,
+    chunk_documents,
+    chunk_documents_parent_child,
+    load_documents,
+)
+from src.retrieve import retrieve_from, retrieve_parent_child
 
 EXPERIMENTS_DIR = config.PROJECT_ROOT / "experiments"
 CHROMA_EXPERIMENTS_DIR = EXPERIMENTS_DIR / "chroma"
@@ -62,10 +69,21 @@ MIN_RELIABLE_FRACTION = 0.7
 # Only re-ingests when chunking/embedding actually changed from baseline -
 # a pure top_k experiment can reuse the baseline's own chroma_db untouched,
 # since top_k only affects how many chunks retrieval asks for, not what got
-# indexed.
-def ingest_for_experiment(label: str, chunk_size: int, chunk_overlap: int, embedding_model: str):
+# indexed. Parent-child always gets its own isolated collection: the index
+# holds small child chunks (not the baseline's plain chunks), so it can
+# never be "the same as baseline" regardless of size overrides.
+def ingest_for_experiment(
+    label: str,
+    chunk_size: int,
+    chunk_overlap: int,
+    embedding_model: str,
+    parent_child: bool = False,
+    parent_chunk_size: int = 0,
+    parent_chunk_overlap: int = 0,
+):
     is_baseline_ingest = (
-        chunk_size == config.CHUNK_SIZE
+        not parent_child
+        and chunk_size == config.CHUNK_SIZE
         and chunk_overlap == config.CHUNK_OVERLAP
         and embedding_model == config.EMBEDDING_MODEL
     )
@@ -77,7 +95,16 @@ def ingest_for_experiment(label: str, chunk_size: int, chunk_overlap: int, embed
     persist_directory = CHROMA_EXPERIMENTS_DIR / label
     print(f"Ingesting isolated collection '{collection_name}' at {persist_directory} ...")
     documents = load_documents(config.DATA_DIR)
-    chunks = chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    if parent_child:
+        chunks = chunk_documents_parent_child(
+            documents,
+            parent_chunk_size=parent_chunk_size,
+            parent_chunk_overlap=parent_chunk_overlap,
+            child_chunk_size=chunk_size,
+            child_chunk_overlap=chunk_overlap,
+        )
+    else:
+        chunks = chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     build_vector_store(
         chunks,
         embedding_model=embedding_model,
@@ -89,13 +116,16 @@ def ingest_for_experiment(label: str, chunk_size: int, chunk_overlap: int, embed
 
 
 # --- Stage 2: generation over the eval dataset, with this config's retrieval ---
-def generate_for_experiment(collection_name, persist_directory, top_k, embedding_model):
+def generate_for_experiment(
+    collection_name, persist_directory, top_k, embedding_model, parent_child: bool = False
+):
+    retrieve_fn = retrieve_parent_child if parent_child else retrieve_from
     items = load_dataset(DATASET_PATH)
     results = []
     for i, item in enumerate(items, start=1):
         question = item["question"]
         print(f"[{i}/{len(items)}] {question}")
-        chunks = retrieve_from(
+        chunks = retrieve_fn(
             question,
             k=top_k,
             collection_name=collection_name,
@@ -180,6 +210,17 @@ def main() -> None:
     parser.add_argument("--chunk-overlap", type=int, default=config.CHUNK_OVERLAP)
     parser.add_argument("--top-k", type=int, default=config.TOP_K)
     parser.add_argument("--embedding-model", default=config.EMBEDDING_MODEL)
+    parser.add_argument(
+        "--parent-child",
+        action="store_true",
+        help="Split into large parent chunks, then small child chunks within each. "
+        "Only the children are embedded/searched; --chunk-size/--chunk-overlap set "
+        "the CHILD size, --parent-chunk-size/--parent-chunk-overlap set the PARENT "
+        "size. Retrieval returns each match's parent (full context), not the child "
+        "that matched (see src/retrieve.py's retrieve_parent_child).",
+    )
+    parser.add_argument("--parent-chunk-size", type=int, default=2000)
+    parser.add_argument("--parent-chunk-overlap", type=int, default=200)
     parser.add_argument("--notes", default="")
     parser.add_argument(
         "--rescore-only",
@@ -200,10 +241,20 @@ def main() -> None:
             results = [json.loads(line) for line in f if line.strip()]
     else:
         collection_name, persist_directory = ingest_for_experiment(
-            args.label, args.chunk_size, args.chunk_overlap, args.embedding_model
+            args.label,
+            args.chunk_size,
+            args.chunk_overlap,
+            args.embedding_model,
+            parent_child=args.parent_child,
+            parent_chunk_size=args.parent_chunk_size,
+            parent_chunk_overlap=args.parent_chunk_overlap,
         )
         results = generate_for_experiment(
-            collection_name, persist_directory, args.top_k, args.embedding_model
+            collection_name,
+            persist_directory,
+            args.top_k,
+            args.embedding_model,
+            parent_child=args.parent_child,
         )
         with open(results_path, "w", encoding="utf-8") as f:
             for r in results:
@@ -212,6 +263,17 @@ def main() -> None:
 
     print("Scoring (fast metrics: faithfulness, context_recall) ...")
     mean_scores, scored_counts = asyncio.run(score_for_experiment(results))
+
+    notes = args.notes
+    if args.parent_child:
+        # chunk_size/chunk_overlap columns hold the CHILD size (what's
+        # actually embedded/searched) - the parent size has no column of
+        # its own, so it's recorded here instead of silently lost.
+        parent_note = (
+            f"parent-child: parent={args.parent_chunk_size}/{args.parent_chunk_overlap}, "
+            f"child={args.chunk_size}/{args.chunk_overlap}"
+        )
+        notes = f"{parent_note}. {notes}" if notes else parent_note
 
     baseline_means = load_baseline_means()
     row = {
@@ -236,7 +298,7 @@ def main() -> None:
         ),
         "context_recall_scored": "%d/%d" % scored_counts.get("context_recall", (0, len(results))),
         "num_questions": len(results),
-        "notes": args.notes,
+        "notes": notes,
     }
     append_csv_row(row)
 

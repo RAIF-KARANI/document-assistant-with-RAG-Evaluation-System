@@ -83,6 +83,45 @@ def chunk_documents(
     return splitter.split_documents(documents)
 
 
+# --- Stage 2b: Parent-child chunking (experiments/run_experiment.py --parent-child) ---
+# One chunk size has to serve two conflicting jobs in plain chunking: small
+# enough to match a query precisely, large enough to contain the full answer
+# as context. This splits each document twice - first into large "parent"
+# chunks, then each parent into small "child" chunks - so only the children
+# get embedded/searched (precise matching), while each child's metadata
+# carries its parent's full text under "parent_content". src/retrieve.py's
+# retrieve_parent_child() searches the children but returns their parents,
+# so the LLM sees more complete context than whatever small piece matched.
+def chunk_documents_parent_child(
+    documents: list[Document],
+    parent_chunk_size: int,
+    parent_chunk_overlap: int,
+    child_chunk_size: int,
+    child_chunk_overlap: int,
+) -> list[Document]:
+    parent_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=parent_chunk_size,
+        chunk_overlap=parent_chunk_overlap,
+    )
+    child_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=child_chunk_size,
+        chunk_overlap=child_chunk_overlap,
+    )
+    parent_chunks = parent_splitter.split_documents(documents)
+
+    child_chunks: list[Document] = []
+    for i, parent in enumerate(parent_chunks):
+        # Index-based, not content-based, since two parent chunks can
+        # legitimately have identical text (e.g. a repeated boilerplate
+        # paragraph) - a hash would collide and merge their children.
+        parent_id = f"{parent.metadata.get('source', 'unknown')}::parent{i}"
+        for child in child_splitter.split_documents([parent]):
+            child.metadata["parent_id"] = parent_id
+            child.metadata["parent_content"] = parent.page_content
+            child_chunks.append(child)
+    return child_chunks
+
+
 # --- Stage 3: Embedding + indexing ---
 # Turns each chunk's text into a vector (via the local sentence-transformers
 # model) and writes vector + text + metadata into the Chroma vector store.

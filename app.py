@@ -16,6 +16,7 @@ from src import config
 from src.chat_log import append_turn, clear_history, load_recent_turns
 from src.generate import generate_answer
 from src.ingest import rebuild_index
+from src.memory import condense_question, extract_history
 from src.retrieve import list_sources, reset_vector_store, retrieve
 
 MY_DOCS_DIR = config.DATA_DIR / "my_docs"
@@ -136,6 +137,10 @@ for message in st.session_state.messages:
 question = st.chat_input("Ask a question about your documents...")
 
 if question:
+    # Snapshot *before* appending the current question, so a follow-up is
+    # never resolved against itself.
+    history = extract_history(st.session_state.messages)
+
     st.session_state.messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.markdown(question)
@@ -149,14 +154,19 @@ if question:
             # content ranks ~11th-12th within a single document, well
             # outside the default top_k=4 tuned for whole-corpus search.
             k = config.SCOPED_TOP_K if selected_source else config.TOP_K
-            chunks = retrieve(question, k=k, source=selected_source)
+            # A bare follow-up ("and what about NoSQL?") has no topic
+            # keywords of its own to search on - rewrite it into a
+            # standalone question using recent history *before* retrieval,
+            # not just when phrasing the final answer.
+            search_question = condense_question(question, history)
+            chunks = retrieve(search_question, k=k, source=selected_source)
 
         if not chunks:
             answer = "No chunks retrieved — has `python -m src.ingest` been run?"
             sources = []
         else:
             with st.spinner("Generating answer..."):
-                answer = generate_answer(question, chunks)
+                answer = generate_answer(question, chunks, history=history)
             sources = [
                 {
                     "source": chunk.metadata.get("source", "unknown"),
@@ -165,6 +175,8 @@ if question:
                 for chunk in chunks
             ]
 
+        if search_question != question:
+            st.caption(f"🔎 Searched for: \"{search_question}\"")
         st.markdown(answer)
         if sources:
             with st.expander(f"📎 {len(sources)} source chunk(s)"):

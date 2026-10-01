@@ -62,8 +62,8 @@ what each module does.
 
 - **Ingestion + retrieval + generation** — working end to end, both as a CLI
   (`src/ask.py`) and a two-page Streamlit UI (`app.py` — chat, document
-  upload, document scoping, persistent chat history; plus an
-  Evaluation Dashboard page).
+  upload, document scoping, multi-turn conversational memory, persistent
+  chat history; plus an Evaluation Dashboard page).
 - **Evaluation** — a 32-question hand-labeled dataset (`eval/dataset.jsonl`),
   scored with Ragas metrics using our own local model as judge (no paid
   judge API). Current baseline: `faithfulness` 0.772, `context_recall` 0.780
@@ -79,11 +79,13 @@ what each module does.
   back to unscoped retrieval — expect a lower score than the committed
   baseline until you add your own document(s) and (optionally) your own
   eval questions for them.
-- **Experimentation** — eight config experiments run against the baseline
+- **Experimentation** — ten config experiments run against the baseline
   (`experiments/experiments.csv`), isolated in their own Chroma collections
   so they never touch the real data. One genuine quality win found (swapping
-  to a larger embedding model), consciously not adopted in favor of speed —
-  see CONCEPTS.md for the full reasoning.
+  to a larger embedding model), consciously not adopted in favor of speed;
+  one genuine negative result (parent-child chunking, tried at two `top_k`
+  values, root-caused rather than just logged) — see CONCEPTS.md for the
+  full reasoning on both.
 - **Corpus** — 11 synthetic RAG-concept docs plus the author's own 62-page
   college project report (`data/my_docs/QueryCraft.pdf`), 283 chunks total
   (table-of-contents/list-of-figures pages are filtered out at ingest time —

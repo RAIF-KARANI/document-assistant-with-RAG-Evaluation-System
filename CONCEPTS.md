@@ -52,10 +52,11 @@ against the small child embeddings, but hand the LLM the full parent chunk.
 Fixes the "precise retrieval vs. full context for generation" tension
 directly, rather than relying on overlap as insurance.
 
-**What we're using / what to try later:** recursive-character splitting is
-our Phase 1 baseline — cheap, predictable, good enough to get a working
-system to measure. Parent-child chunking is the most promising upgrade to
-test in Phase 4, scored against the eval harness rather than guessed at.
+**What we're using / what we tried:** recursive-character splitting is our
+Phase 1 baseline — cheap, predictable, good enough to get a working system
+to measure. Parent-child chunking looked like the most promising upgrade on
+paper; tried it for real (see the Phase 4 write-up below) and it measurably
+underperformed the baseline, not improved on it.
 
 ## Embeddings
 
@@ -752,3 +753,62 @@ would recur silently for any future fix in this area if the coverage gap
 weren't closed. An eval dataset only measures what it happens to contain -
 expanding it deliberately when a new class of behavior is discovered is
 part of the eval work, not a one-time setup step.
+
+## Phase 4, experiment 7: parent-child chunking (a second genuine finding — this time negative)
+
+Implemented for real, not just discussed: `chunk_documents_parent_child()`
+(`src/ingest.py`) splits each document into large parent chunks (2000
+chars/200 overlap), then each parent into small child chunks (400/40). Only
+the children get embedded/indexed. `retrieve_parent_child()`
+(`src/retrieve.py`) searches the children, then returns each match's unique
+*parent* (deduped by `parent_id`) instead of the child itself - precise
+matching, full context, in theory.
+
+**Result (`top_k=4`, matching baseline):** `faithfulness` 0.772→0.767
+(−0.006, noise-level), `context_recall` **0.780→0.673 (−0.107, a real
+regression)**.
+
+**Root-caused before accepting the number.** Checked how many *unique*
+parent chunks actually came back per question:
+
+```
+chunk counts per question: [3, 2, 1, 3, 3, 3, 3, 2, 2, 4, 3, 2, 4, 3, 2, 4,
+4, 4, 2, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 2, 2]
+average: 3.09 (requested top_k=4)
+```
+
+Hypothesis: with 400-char children inside 2000-char parents, each parent
+contains ~5 children - so top-4 child matches often land in the *same*
+parent, collapsing to fewer than 4 unique parents (one question collapsed
+to just 1). Less context breadth than the baseline's always-4-distinct-
+chunks should hurt recall.
+
+**Tested the hypothesis directly rather than assuming it:** reran with
+`top_k=8` to compensate. Confirmed the mechanism - unique parents per
+question rose to an average of **5.62** (now *more* breadth than baseline's
+fixed 4):
+
+```
+unique parent counts per question (k=8): [5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 6,
+5, 6, 5, 5, 5, 5, 5, 5, 4, 7, 7, 8, 7, 8, 8, 7, 7, 7, 7, 3, 4]
+average: 5.625
+```
+
+**But `context_recall` didn't move: 0.673→0.671.** The dedup-collapse
+hypothesis was real (mechanically confirmed) but wasn't the actual cause of
+the regression - more parents, same score. That rules out "not enough
+chunks" and points instead at match *quality*: 400-char children are
+smaller than the baseline's 500-char chunks, and may simply embed/match
+less precisely regardless of how many parents get pulled in afterward - a
+bad initial child-level match doesn't get fixed by handing over a bigger
+parent, it just hands over a bigger *wrong* parent.
+
+**Decision: not adopted.** Two configs tried (`top_k=4` and `top_k=8`),
+both measurably worse than the simple baseline on the metric that matters
+most here. This is a genuine negative result, not a shrug - an idea that
+sounds obviously better on paper (precise retrieval *and* full context!)
+measurably wasn't, on this corpus, with these sizes. The natural next
+variable to isolate would be child chunk size itself (e.g. 500 instead of
+400, closer to baseline) - deliberately not pursued further for now, same
+"diminishing teaching value vs. more compute time" tradeoff noted after
+Phase 4's embedding-model experiment.
